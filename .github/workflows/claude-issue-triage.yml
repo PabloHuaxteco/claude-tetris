@@ -1,0 +1,123 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+# Un solo triaje activo por issue: si el autor edita varias veces seguidas,
+# se cancela el análisis en vuelo y gana el último.
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    # Guardas:
+    #  - no correr sobre PRs (el evento `issues` no los incluye, pero por si acaso)
+    #  - ignorar issues abiertos/editados por bots (evita bucles de reacción)
+    #  - dejar los issues que invocan a @claude para el workflow claude.yml
+    if: |
+      github.event.issue.pull_request == null &&
+      github.event.sender.type != 'Bot' &&
+      !contains(github.event.issue.body, '@claude') &&
+      !contains(github.event.issue.title, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write        # necesario para etiquetar y comentar el issue
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: triage
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: >-
+            --allowedTools "Read,Glob,Grep,Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh api:*),Bash(gh label list:*)"
+          prompt: |
+            Eres un asistente de triaje para el repositorio ${{ github.repository }}.
+            Se ha ${{ github.event.action }} el issue #${{ github.event.issue.number }}.
+            Responde SIEMPRE en español.
+
+            ## Objetivo
+            1. Asignar los labels apropiados al issue.
+            2. Publicar (o actualizar) un comentario con un diagnóstico técnico que
+               sirva de base para implementar después la solución.
+
+            ## Paso 1 — Leer el issue
+            Ejecuta:
+              gh issue view ${{ github.event.issue.number }} --json title,body,labels,author,comments
+            Ten en cuenta que el issue puede haber sido editado; analiza su estado actual.
+
+            ## Paso 2 — Entender el código
+            Lee `CLAUDE.md` (describe la arquitectura completa: modelo `board`, `PIECES`,
+            `collide`, `tryRotate` con wall kicks, `loop`/`dropAccum`, `lockPiece` → `merge`
+            → `clearLines`, scoring/leveling, ghost piece, `draw`/`drawNext`).
+            Usa Read/Grep/Glob sobre `game.js`, `index.html` y `style.css` para localizar
+            las funciones y constantes concretas implicadas en lo que pide el issue.
+            NO modifiques ningún archivo de código.
+
+            ## Paso 3 — Etiquetar
+            Elige labels EXCLUSIVAMENTE de esta lista (no inventes ni crees labels nuevos):
+              bug, enhancement, documentation, question, accessibility, duplicate,
+              invalid, good first issue, help wanted, wontfix
+            Reglas:
+              - Aplica al menos un label de tipo: bug | enhancement | documentation | question.
+              - Añade los transversales que apliquen (p. ej. accessibility, good first issue).
+              - NO quites labels que ya estén puestos por una persona; solo añade.
+            Aplícalos con:
+              gh issue edit ${{ github.event.issue.number }} --add-label "label1,label2"
+
+            ## Paso 4 — Redactar el diagnóstico
+            Usa exactamente esta plantilla (en español), rellenando cada sección:
+
+            <!-- claude-triage -->
+            ## 🔍 Diagnóstico automático
+
+            **Tipo**: bug | mejora | duda | documentación
+            **Labels aplicados**: ...
+
+            ### Resumen
+            Qué reporta o pide el issue, en 1-2 frases.
+
+            ### Código implicado
+            Archivos y funciones concretas (p. ej. `game.js:tryRotate`,
+            `game.js:clearLines`), con la línea aproximada.
+
+            ### Causa probable / punto de cambio
+            Para bugs: por qué ocurre. Para mejoras: dónde encaja el cambio.
+
+            ### Enfoque sugerido
+            Pasos concretos de implementación, reutilizando las constantes y funciones
+            existentes en vez de proponer estructuras nuevas.
+
+            ### Criterios de aceptación
+            Lista verificable a mano en el navegador (el repo no tiene tests automatizados).
+
+            ### Riesgos / dudas abiertas
+            Lo que falta por aclarar con quien abrió el issue, si aplica.
+
+            ## Paso 5 — Publicar de forma idempotente
+            Antes de comentar, busca un comentario propio previo que contenga el marcador
+            `<!-- claude-triage -->`:
+              gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+                --jq '.[] | select(.body | contains("<!-- claude-triage -->")) | .id'
+            Escribe el diagnóstico en un fichero (p. ej. /tmp/triage.md) y luego:
+              - Si existe un comentario previo con ese ID, actualízalo:
+                  gh api --method PATCH \
+                    repos/${{ github.repository }}/issues/comments/<ID> \
+                    -f body="$(cat /tmp/triage.md)"
+              - Si no existe, créalo:
+                  gh issue comment ${{ github.event.issue.number }} --body-file /tmp/triage.md
+
+            ## Restricciones
+            - No modifiques código ni abras pull requests.
+            - No cierres el issue ni edites su cuerpo (el texto de la persona autora).
+            - No uses más labels que los de la lista del Paso 3.
