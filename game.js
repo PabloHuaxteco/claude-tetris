@@ -38,6 +38,9 @@ const BOMB_BLOCK_SCORE = 10; // puntos por bloque destruido, multiplicados por l
 
 const GRID_LINE_COLORS = { dark: '#22222e', light: '#d8dae8' };
 
+const RECORDS_KEY = 'tetris-records'; // localStorage: { scores: [...], bestCombo, maxLines }
+const MAX_RECORDS = 5;
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -45,14 +48,113 @@ const nextCtx = nextCanvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
+const comboEl = document.getElementById('combo');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
+const overlayRecords = document.getElementById('overlay-records');
 const restartBtn = document.getElementById('restart-btn');
+const resetRecordsBtn = document.getElementById('reset-records-btn');
+const nameEntry = document.getElementById('name-entry');
+const playerNameInput = document.getElementById('player-name');
+const saveScoreBtn = document.getElementById('save-score-btn');
+const startOverlay = document.getElementById('start-overlay');
+const startRecords = document.getElementById('start-records');
+const playBtn = document.getElementById('play-btn');
+const resetRecordsBtnStart = document.getElementById('reset-records-btn-start');
 const themeToggleBtn = document.getElementById('theme-toggle');
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, next, score, lines, level, combo, maxCombo, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let scoreSaved = false;        // evita guardar dos veces la misma partida
+let highlightDate = null;      // marca de tiempo del record recién guardado (para resaltarlo)
 let theme = 'dark';
+
+// ---- Tabla de records (localStorage) ----
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function loadRecords() {
+  try {
+    const data = JSON.parse(localStorage.getItem(RECORDS_KEY)) || {};
+    return {
+      scores: Array.isArray(data.scores) ? data.scores : [],
+      bestCombo: Number(data.bestCombo) || 0,
+      maxLines: Number(data.maxLines) || 0,
+    };
+  } catch {
+    return { scores: [], bestCombo: 0, maxLines: 0 };
+  }
+}
+
+function saveRecords(data) {
+  try {
+    localStorage.setItem(RECORDS_KEY, JSON.stringify(data));
+  } catch { /* localStorage no disponible: se ignora */ }
+}
+
+function qualifiesForTop(sc) {
+  if (sc <= 0) return false;
+  const { scores } = loadRecords();
+  return scores.length < MAX_RECORDS || sc > scores[scores.length - 1].score;
+}
+
+function addScore(name, sc, ln, lv) {
+  const data = loadRecords();
+  const entry = {
+    name: (name || '').trim() || 'Anónimo',
+    score: sc,
+    lines: ln,
+    level: lv,
+    date: Date.now(),
+  };
+  data.scores.push(entry);
+  data.scores.sort((a, b) => b.score - a.score);
+  data.scores = data.scores.slice(0, MAX_RECORDS);
+  saveRecords(data);
+  return entry;
+}
+
+function updateAggregateRecords(bestComboRun, ln) {
+  const data = loadRecords();
+  let changed = false;
+  if (bestComboRun > data.bestCombo) { data.bestCombo = bestComboRun; changed = true; }
+  if (ln > data.maxLines) { data.maxLines = ln; changed = true; }
+  if (changed) saveRecords(data);
+}
+
+function renderRecords(container) {
+  const { scores, bestCombo: best, maxLines } = loadRecords();
+  let html = '<div class="records-title">TOP 5</div>';
+  if (scores.length === 0) {
+    html += '<div class="records-empty">Sin records todavía</div>';
+  } else {
+    html += '<ol class="records-list">';
+    for (const s of scores) {
+      const hl = highlightDate && s.date === highlightDate ? ' class="hl"' : '';
+      html += `<li${hl}><span class="rname">${escapeHtml(s.name)}</span>`
+        + `<span class="rscore">${s.score.toLocaleString()}</span></li>`;
+    }
+    html += '</ol>';
+  }
+  html += `<div class="records-agg">Mejor combo: <b>${best}</b> &middot; `
+    + `Líneas máx: <b>${maxLines}</b></div>`;
+  container.innerHTML = html;
+}
+
+function renderAllRecords() {
+  renderRecords(startRecords);
+  renderRecords(overlayRecords);
+}
+
+function resetRecords() {
+  if (!window.confirm('¿Borrar todos los records?')) return;
+  saveRecords({ scores: [], bestCombo: 0, maxLines: 0 });
+  highlightDate = null;
+  renderAllRecords();
+}
 
 function applyTheme(t) {
   theme = t === 'light' ? 'light' : 'dark';
@@ -125,10 +227,15 @@ function clearLines() {
     }
   }
   if (cleared) {
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    updateHUD();
+  } else {
+    combo = 0;
     updateHUD();
   }
 }
@@ -206,6 +313,7 @@ function updateHUD() {
   scoreEl.textContent = score.toLocaleString();
   linesEl.textContent = lines;
   levelEl.textContent = level;
+  comboEl.textContent = combo;
 }
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
@@ -281,9 +389,37 @@ function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
   animId = null;
+
+  updateAggregateRecords(maxCombo, lines);
+  scoreSaved = false;
+  highlightDate = null;
+
   overlayTitle.textContent = 'GAME OVER';
-  overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+  overlayScore.textContent = `Puntuación: ${score.toLocaleString()} · Líneas: ${lines} · Combo máx: ${maxCombo}`;
+  resetRecordsBtn.classList.remove('hidden');
+
+  const qualifies = qualifiesForTop(score);
+  nameEntry.classList.toggle('hidden', !qualifies);
+  if (qualifies) playerNameInput.value = '';
+  renderRecords(overlayRecords);
   overlay.classList.remove('hidden');
+  if (qualifies) playerNameInput.focus();
+}
+
+function saveCurrentScore() {
+  if (scoreSaved || !qualifiesForTop(score)) return;
+  const entry = addScore(playerNameInput.value, score, lines, level);
+  highlightDate = entry.date;
+  scoreSaved = true;
+  nameEntry.classList.add('hidden');
+  renderAllRecords();
+}
+
+function showStartScreen() {
+  highlightDate = null;
+  renderRecords(startRecords);
+  overlay.classList.add('hidden');
+  startOverlay.classList.remove('hidden');
 }
 
 function togglePause() {
@@ -296,6 +432,9 @@ function togglePause() {
     cancelAnimationFrame(animId);
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
+    nameEntry.classList.add('hidden');
+    overlayRecords.innerHTML = '';
+    resetRecordsBtn.classList.add('hidden');
     overlay.classList.remove('hidden');
   }
 }
@@ -326,14 +465,20 @@ function init() {
   score = 0;
   lines = 0;
   level = 1;
+  combo = 0;
+  maxCombo = 0;
   paused = false;
   gameOver = false;
+  scoreSaved = false;
+  highlightDate = null;
   dropInterval = 1000;
   dropAccum = 0;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
   updateHUD();
+  nameEntry.classList.add('hidden');
+  startOverlay.classList.add('hidden');
   overlay.classList.add('hidden');
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
@@ -366,6 +511,15 @@ document.addEventListener('keydown', e => {
 });
 
 restartBtn.addEventListener('click', init);
+playBtn.addEventListener('click', init);
+saveScoreBtn.addEventListener('click', saveCurrentScore);
+resetRecordsBtn.addEventListener('click', resetRecords);
+resetRecordsBtnStart.addEventListener('click', resetRecords);
+
+playerNameInput.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.code === 'Enter') saveCurrentScore();
+});
 
 themeToggleBtn.addEventListener('click', () => {
   const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -374,4 +528,4 @@ themeToggleBtn.addEventListener('click', () => {
 });
 
 applyTheme(localStorage.getItem('theme') || 'dark');
-init();
+showStartScreen();

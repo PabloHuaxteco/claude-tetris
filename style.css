@@ -231,3 +231,187 @@ kbd {
 #restart-btn:hover {
   background: var(--btn-hover);
 }
+
+/* ---- Tabla de records ---- */
+.secondary-btn {
+  background: transparent;
+  color: var(--controls-text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.secondary-btn:hover {
+  border-color: var(--overlay-title);
+  color: var(--overlay-title);
+}
+
+.records {
+  width: 260px;
+  max-width: 78vw;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.records-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--label-color);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.records-empty {
+  font-size: 12px;
+  color: var(--controls-text);
+  padding: 4px 0 8px;
+}
+
+.records-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  counter-reset: rank;
+}
+
+.records-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-family: 'Courier New', Courier, monospace;
+  color: var(--text);
+  padding: 3px 6px;
+  border-radius: 3px;
+  counter-increment: rank;
+}
+
+.records-list li::before {
+  content: counter(rank) ".";
+  color: var(--label-color);
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.records-list li.hl {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+}
+
+.records-list li.hl::before {
+  color: var(--btn-text);
+}
+
+.records-list .rname {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-list .rscore {
+  font-weight: 700;
+}
+
+.records-agg {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--controls-text);
+  letter-spacing: 0.5px;
+}
+
+.records-agg b {
+  color: var(--value-color);
+}
+
+.name-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 260px;
+  max-width: 78vw;
+}
+
+.name-entry.hidden {
+  display: none;
+}
+
+.name-entry label {
+  font-size: 11px;
+  color: var(--overlay-score);
+  letter-spacing: 0.5px;
+}
+
+.name-entry-row {
+  display: flex;
+  gap: 6px;
+}
+
+#player-name {
+  flex: 1;
+  background: var(--panel-bg);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: 'Courier New', Courier, monospace;
+  color: var(--text);
+}
+
+#player-name:focus-visible {
+  outline: 2px solid var(--value-color);
+  outline-offset: 1px;
+}
+
+#save-score-btn {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: background 0.15s;
+}
+
+#save-score-btn:hover {
+  background: var(--btn-hover);
+}
+
+#start-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 8px;
+  color: var(--title-color);
+  text-shadow: 0 0 20px rgba(122, 162, 247, 0.5);
+}
+
+#play-btn {
+  margin-top: 4px;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: none;
+  border-radius: 6px;
+  padding: 10px 40px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 2px;
+  transition: background 0.15s;
+}
+
+#play-btn:hover {
+  background: var(--btn-hover);
+}
