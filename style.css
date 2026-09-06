@@ -323,3 +323,99 @@ kbd {
 .skin-slot .menu-select {
   width: 100%;
 }
+/* ---- Records ---- */
+.records-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.records-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--label-color);
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.records-table th,
+.records-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+
+.records-table th {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--label-color);
+  font-weight: 600;
+}
+
+.records-table th:nth-child(2),
+.records-table td:nth-child(2) {
+  text-align: left;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.records-table .is-current td {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  font-weight: 700;
+}
+
+.records-empty {
+  font-size: 12px;
+  color: var(--controls-text);
+  text-align: center;
+}
+
+.records-stat {
+  font-size: 11px;
+  color: var(--label-color);
+}
+
+.records-save {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.records-save input {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.records-save .menu-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+#reset-records-btn {
+  align-self: center;
+  padding: 6px 12px;
+  font-size: 11px;
+}
