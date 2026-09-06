@@ -22,8 +22,8 @@ There are no automated tests; verify changes by playing the game in a browser (s
 
 All logic lives in `game.js` as top-level functions/state (no classes, no modules). Key pieces:
 
-- **Board model**: `board` is a `ROWS × COLS` matrix; each cell is `0` (empty) or an index 1–7 into `COLORS`/`PIECES` identifying which tetromino occupies it.
-- **Pieces**: `PIECES` are 4x4/3x3/2x2 matrices of color indices. Rotation is done via matrix transpose (`rotateCW`), not precomputed rotation states.
+- **Board model**: `board` is a `ROWS × COLS` matrix; each cell is `0` (empty) or an index 1–8 into `COLORS`/`PIECES` identifying which tetromino occupies it.
+- **Pieces**: `PIECES` are 4x4/3x3/2x2 matrices of color indices. Rotation is done via matrix transpose (`rotateCW`), not precomputed rotation states. Index 8 is the "tuerca" (nut) — a challenge piece: a 3x3 ring of blocks with a hollow (empty) center cell. It is rotationally symmetric so rotating it is a no-op, and its enclosed center hole can never be filled, so the row through a locked nut's center can never be cleared. Drawn as plain square blocks like every other piece (the hole is just an unpainted cell); no round shapes anywhere in the canvas.
 - **Collision** (`collide`): checks a shape against board bounds and already-locked cells.
 - **Wall kicks** (`tryRotate`): after rotating, tries offsets `[0, -1, 1, -2, 2]` columns until one doesn't collide.
 - **Game loop** (`loop`): driven by `requestAnimationFrame`; accumulates elapsed time in `dropAccum` and advances the piece one row once `dropInterval` is exceeded.
