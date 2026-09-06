@@ -38,6 +38,9 @@ const BOMB_BLOCK_SCORE = 10; // puntos por bloque destruido, multiplicados por l
 
 const GRID_LINE_COLORS = { dark: '#22222e', light: '#d8dae8' };
 
+const START_LEVEL_KEY = 'tetris.startLevel';
+const MAX_START_LEVEL = 15;
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -48,11 +51,53 @@ const levelEl = document.getElementById('level');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
-const restartBtn = document.getElementById('restart-btn');
 const themeToggleBtn = document.getElementById('theme-toggle');
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+const screenStart = document.getElementById('screen-start');
+const screenPause = document.getElementById('screen-pause');
+const screenGameover = document.getElementById('screen-gameover');
+const playBtn = document.getElementById('play-btn');
+const resumeBtn = document.getElementById('resume-btn');
+const restartBtn = document.getElementById('restart-btn');
+const gameoverRestartBtn = document.getElementById('gameover-restart-btn');
+const controlsBtn = document.getElementById('controls-btn');
+const controlsList = document.getElementById('controls-list');
+const startLevelSel = document.getElementById('start-level');
+const pauseLevelSel = document.getElementById('pause-level');
+
+// Estado del juego. `screen` es la máquina de estados de la UI:
+// 'start' | 'playing' | 'paused' | 'gameover'. `paused`/`gameOver` se derivan
+// de ella para que `loop()` siga funcionando sin cambios.
+let board, current, next, score, lines, level, startLevel;
+// `gameStartLevel` = nivel inicial fijado al arrancar la partida en curso; `clearLines`
+// lo usa para calcular el nivel, de modo que cambiar el selector "próxima partida"
+// durante la pausa no altera la velocidad de la partida actual.
+let gameStartLevel;
+// `combo` (rachas de líneas consecutivas) lo alimenta esta base y lo consume la
+// función de records (mejor combo). Sin esa función todavía no se muestra en ningún sitio.
+let combo;
+let paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let screen = 'start';
 let theme = 'dark';
+
+/* ---------- Preferencias persistentes ---------- */
+
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function saveJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    /* localStorage no disponible (modo privado, cuota, etc.) */
+  }
+}
 
 function applyTheme(t) {
   theme = t === 'light' ? 'light' : 'dark';
@@ -62,6 +107,64 @@ function applyTheme(t) {
   themeToggleBtn.title = theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro';
   themeToggleBtn.setAttribute('aria-label', themeToggleBtn.title);
 }
+
+/* ---------- Niveles ---------- */
+
+function clampLevel(v) {
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(MAX_START_LEVEL, Math.max(1, n));
+}
+
+function levelInterval(l) {
+  return Math.max(100, 1000 - (l - 1) * 90);
+}
+
+function buildLevelSelects() {
+  for (const sel of [startLevelSel, pauseLevelSel]) {
+    if (!sel || sel.options.length) continue;
+    for (let i = 1; i <= MAX_START_LEVEL; i++) {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = String(i);
+      sel.appendChild(opt);
+    }
+  }
+}
+
+function syncLevelSelects() {
+  for (const sel of [startLevelSel, pauseLevelSel]) {
+    if (sel) sel.value = String(startLevel);
+  }
+}
+
+function setStartLevel(v) {
+  startLevel = clampLevel(v);
+  saveJSON(START_LEVEL_KEY, startLevel);
+  syncLevelSelects();
+}
+
+/* ---------- Pantallas / overlay ---------- */
+
+function showScreen(name) {
+  screen = name;
+  paused = name === 'paused';
+  gameOver = name === 'gameover';
+  const screens = { start: screenStart, paused: screenPause, gameover: screenGameover };
+  for (const el of Object.values(screens)) el.classList.add('hidden');
+  if (name === 'playing') {
+    overlay.classList.add('hidden');
+  } else {
+    overlay.classList.remove('hidden');
+    if (screens[name]) screens[name].classList.remove('hidden');
+  }
+}
+
+// Hooks ampliados por otras unidades del batch (records). En la base no hacen nada.
+function onGameOver() {}
+function onStartScreen() {}
+
+/* ---------- Lógica del tablero ---------- */
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -127,9 +230,12 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    combo++;
+    level = gameStartLevel + Math.floor(lines / 10);
+    dropInterval = levelInterval(level);
     updateHUD();
+  } else {
+    combo = 0;
   }
 }
 
@@ -278,25 +384,22 @@ function drawNext() {
 }
 
 function endGame() {
-  gameOver = true;
   cancelAnimationFrame(animId);
   animId = null;
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
-  overlay.classList.remove('hidden');
+  showScreen('gameover');
+  onGameOver();
 }
 
 function togglePause() {
-  if (gameOver) return;
-  paused = !paused;
-  if (!paused) {
-    lastTime = performance.now();
-    loop(lastTime);
-  } else {
+  if (screen === 'playing') {
     cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
+    showScreen('paused');
+  } else if (screen === 'paused') {
+    showScreen('playing');
+    lastTime = performance.now();
+    animId = requestAnimationFrame(loop);
   }
 }
 
@@ -321,28 +424,55 @@ function loop(ts) {
   animId = requestAnimationFrame(loop);
 }
 
+// Prepara una partida nueva sin arrancarla ni cambiar de pantalla.
 function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
-  paused = false;
+  combo = 0;
   gameOver = false;
-  dropInterval = 1000;
+  paused = false;
+  startLevel = clampLevel(loadJSON(START_LEVEL_KEY, 1));
+  gameStartLevel = startLevel;
+  level = startLevel;
+  dropInterval = levelInterval(level);
   dropAccum = 0;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
   updateHUD();
-  overlay.classList.add('hidden');
   cancelAnimationFrame(animId);
+  animId = null;
+}
+
+// Arranca una partida nueva desde cualquier pantalla.
+function startGame() {
+  init();
+  // Si el spawn inicial fue imposible, spawn()->endGame() ya puso screen='gameover'
+  // y gameOver=true; no arrancamos el bucle. (No debería ocurrir en tablero vacío.)
+  if (gameOver) return;
+  showScreen('playing');
+  lastTime = performance.now();
   animId = requestAnimationFrame(loop);
 }
 
+/* ---------- Entrada de teclado ---------- */
+
 document.addEventListener('keydown', e => {
   if (e.target === themeToggleBtn) return;
-  if (e.code === 'KeyP') { togglePause(); return; }
-  if (paused || gameOver) return;
+  // No robar teclas cuando el foco está en un campo del menú.
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+
+  if (e.code === 'KeyP' || e.code === 'Escape') {
+    if (screen === 'playing' || screen === 'paused') {
+      e.preventDefault();
+      togglePause();
+    }
+    return;
+  }
+
+  if (screen !== 'playing') return;
+
   switch (e.code) {
     case 'ArrowLeft':
       if (!collide(current.shape, current.x - 1, current.y)) current.x--;
@@ -365,7 +495,20 @@ document.addEventListener('keydown', e => {
   updateHUD();
 });
 
-restartBtn.addEventListener('click', init);
+/* ---------- Botones del menú ---------- */
+
+playBtn.addEventListener('click', startGame);
+resumeBtn.addEventListener('click', togglePause);
+restartBtn.addEventListener('click', startGame);
+gameoverRestartBtn.addEventListener('click', startGame);
+
+controlsBtn.addEventListener('click', () => {
+  const hidden = controlsList.classList.toggle('hidden');
+  controlsBtn.setAttribute('aria-expanded', String(!hidden));
+});
+
+startLevelSel.addEventListener('change', e => setStartLevel(e.target.value));
+pauseLevelSel.addEventListener('change', e => setStartLevel(e.target.value));
 
 themeToggleBtn.addEventListener('click', () => {
   const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -373,5 +516,11 @@ themeToggleBtn.addEventListener('click', () => {
   applyTheme(newTheme);
 });
 
+/* ---------- Arranque ---------- */
+
 applyTheme(localStorage.getItem('theme') || 'dark');
-init();
+buildLevelSelects();
+startLevel = clampLevel(loadJSON(START_LEVEL_KEY, 1));
+syncLevelSelects();
+showScreen('start');
+onStartScreen();

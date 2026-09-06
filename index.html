@@ -47,9 +47,44 @@
 
     <div id="overlay" class="overlay hidden">
       <div class="overlay-box">
-        <p id="overlay-title">GAME OVER</p>
-        <p id="overlay-score"></p>
-        <button id="restart-btn">Reiniciar</button>
+        <!-- Pantalla de inicio -->
+        <div id="screen-start" class="screen hidden">
+          <p class="screen-title">TETRIS</p>
+          <div id="start-records" class="records-slot"></div>
+          <div id="start-skin" class="skin-slot"></div>
+          <label class="menu-field">
+            Nivel inicial
+            <select id="start-level" class="menu-select"></select>
+          </label>
+          <button id="play-btn" class="menu-btn" type="button">JUGAR</button>
+        </div>
+
+        <!-- Menú de pausa -->
+        <div id="screen-pause" class="screen hidden">
+          <p class="screen-title">PAUSA</p>
+          <button id="resume-btn" class="menu-btn" type="button">Reanudar</button>
+          <button id="restart-btn" class="menu-btn" type="button">Reiniciar</button>
+          <button id="controls-btn" class="menu-btn menu-btn--ghost" type="button" aria-expanded="false" aria-controls="controls-list">Ver controles</button>
+          <ul id="controls-list" class="controls-list hidden">
+            <li><kbd>←</kbd><kbd>→</kbd> mover</li>
+            <li><kbd>↑</kbd> / <kbd>X</kbd> rotar</li>
+            <li><kbd>↓</kbd> bajar</li>
+            <li><kbd>Space</kbd> caída dura</li>
+            <li><kbd>P</kbd> / <kbd>Esc</kbd> pausa</li>
+          </ul>
+          <label class="menu-field">
+            Nivel inicial (próxima partida)
+            <select id="pause-level" class="menu-select"></select>
+          </label>
+        </div>
+
+        <!-- Game over -->
+        <div id="screen-gameover" class="screen hidden">
+          <p id="overlay-title" class="screen-title">GAME OVER</p>
+          <p id="overlay-score"></p>
+          <div id="gameover-records" class="records-slot"></div>
+          <button id="gameover-restart-btn" class="menu-btn" type="button">Reiniciar</button>
+        </div>
       </div>
     </div>
   </div>
