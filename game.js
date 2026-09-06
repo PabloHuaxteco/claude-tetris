@@ -41,6 +41,48 @@ const GRID_LINE_COLORS = { dark: '#22222e', light: '#d8dae8' };
 const START_LEVEL_KEY = 'tetris.startLevel';
 const MAX_START_LEVEL = 15;
 
+/* ---------- Skins (temas visuales del canvas) ---------- */
+
+const SKIN_KEY = 'tetris.skin';
+
+// Cada skin aporta: su paleta por índice (1..9, alineada con COLORS), el color de
+// la rejilla (función de tema), el color de fondo del canvas (null = transparente,
+// lo pinta el CSS) y una función que dibuja el CUERPO del bloque. `drawBlock` añade
+// encima la marca de la bomba; el hueco de la tuerca es una celda con índice 0 que
+// simplemente no se pinta. Ninguna skin usa formas redondeadas (regla del proyecto).
+const SKINS = {
+  retro: {
+    label: 'Retro',
+    colors: COLORS,
+    bg: null,
+    grid: t => GRID_LINE_COLORS[t],
+    block: blockRetro,
+  },
+  neon: {
+    label: 'Neon',
+    colors: [null, '#00e5ff', '#ffea00', '#e040fb', '#00e676', '#ff5252', '#448aff', '#ffab40', '#b0bec5', '#ff1744'],
+    bg: '#000000',
+    grid: () => 'rgba(0, 229, 255, 0.10)',
+    block: blockNeon,
+  },
+  pastel: {
+    label: 'Pastel',
+    colors: [null, '#a7dde0', '#f7e9a0', '#d9b8ec', '#b6e3c0', '#f2b8bd', '#bcd4f0', '#f3cea8', '#cdd6da', '#f2a1ac'],
+    bg: null,
+    grid: t => GRID_LINE_COLORS[t],
+    block: blockPastel,
+  },
+  pixel: {
+    label: 'Pixel art',
+    colors: COLORS,
+    bg: null,
+    grid: t => GRID_LINE_COLORS[t],
+    block: blockPixel,
+  },
+};
+
+let activeSkin = 'retro';
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -64,6 +106,8 @@ const controlsBtn = document.getElementById('controls-btn');
 const controlsList = document.getElementById('controls-list');
 const startLevelSel = document.getElementById('start-level');
 const pauseLevelSel = document.getElementById('pause-level');
+const startSkinSlot = document.getElementById('start-skin');
+let skinSelect = null;
 
 // Estado del juego. `screen` es la máquina de estados de la UI:
 // 'start' | 'playing' | 'paused' | 'gameover'. `paused`/`gameOver` se derivan
@@ -106,6 +150,40 @@ function applyTheme(t) {
   themeToggleBtn.textContent = theme === 'light' ? '☀️' : '🌙';
   themeToggleBtn.title = theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro';
   themeToggleBtn.setAttribute('aria-label', themeToggleBtn.title);
+}
+
+/* ---------- Skin (selector persistente) ---------- */
+
+// Genera el <select id="skin-select"> dentro de #start-skin (hueco vacío del HTML).
+function buildSkinSelect() {
+  if (!startSkinSlot || skinSelect) return;
+  const field = document.createElement('label');
+  field.className = 'menu-field';
+  field.textContent = 'Skin';
+  skinSelect = document.createElement('select');
+  skinSelect.id = 'skin-select';
+  skinSelect.className = 'menu-select';
+  for (const [key, s] of Object.entries(SKINS)) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = s.label;
+    skinSelect.appendChild(opt);
+  }
+  field.appendChild(skinSelect);
+  startSkinSlot.appendChild(field);
+  skinSelect.addEventListener('change', e => {
+    saveJSON(SKIN_KEY, e.target.value);
+    applySkin(e.target.value);
+  });
+}
+
+// Aplica la skin y repinta en caliente (sin recargar). Los repintados se protegen
+// porque en la pantalla de inicio todavía no hay `board`/`current`/`next`.
+function applySkin(name) {
+  activeSkin = SKINS[name] ? name : 'retro';
+  if (skinSelect) skinSelect.value = activeSkin;
+  if (board && current) draw();
+  if (next) drawNext();
 }
 
 /* ---------- Niveles ---------- */
@@ -314,27 +392,83 @@ function updateHUD() {
   levelEl.textContent = level;
 }
 
+/* ---------- Pintado de bloques por skin ---------- */
+
+// Retro: relleno plano + franja superior translúcida. Produce EXACTAMENTE los
+// mismos píxeles que el pintado histórico (px = x*size, py = y*size).
+function blockRetro(context, px, py, size, color) {
+  context.fillStyle = color;
+  context.fillRect(px + 1, py + 1, size - 2, size - 2);
+  context.fillStyle = 'rgba(255,255,255,0.12)';
+  context.fillRect(px + 1, py + 1, size - 2, 4);
+}
+
+// Neon: bloque con glow vía shadowBlur/shadowColor. Se resetea el shadow al
+// terminar para que el brillo no contamine rejilla, ghost ni el resto del frame.
+function blockNeon(context, px, py, size, color) {
+  context.shadowColor = color;
+  context.shadowBlur = Math.round(size * 0.45);
+  context.fillStyle = color;
+  context.fillRect(px + 2, py + 2, size - 4, size - 4);
+  context.shadowBlur = 0;
+  context.shadowColor = 'transparent';
+  // núcleo interior más claro (rectangular, sin esquinas redondeadas)
+  const inner = Math.round(size * 0.36);
+  const off = Math.round((size - inner) / 2);
+  context.fillStyle = 'rgba(255,255,255,0.22)';
+  context.fillRect(px + off, py + off, inner, inner);
+}
+
+// Pastel: color suave + degradado interior claro que da sensación "blanda", más
+// un bisel claro arriba/izquierda. Siempre rectángulos: sin arc/roundRect.
+function blockPastel(context, px, py, size, color) {
+  context.fillStyle = color;
+  context.fillRect(px + 1, py + 1, size - 2, size - 2);
+  const grad = context.createLinearGradient(px, py, px + size, py + size);
+  grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.05)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.10)');
+  context.fillStyle = grad;
+  context.fillRect(px + 1, py + 1, size - 2, size - 2);
+  context.fillStyle = 'rgba(255,255,255,0.40)';
+  context.fillRect(px + 2, py + 2, size - 4, 2);
+  context.fillRect(px + 2, py + 2, 2, size - 4);
+}
+
+// Pixel art: relleno plano + tramado de puntos de 2 px alternando claro/oscuro.
+function blockPixel(context, px, py, size, color) {
+  context.fillStyle = color;
+  context.fillRect(px + 1, py + 1, size - 2, size - 2);
+  const step = 4;
+  const dot = 2;
+  for (let oy = 2; oy < size - 2; oy += step) {
+    for (let ox = 2; ox < size - 2; ox += step) {
+      const dark = ((ox + oy) / step) % 2 === 0;
+      context.fillStyle = dark ? 'rgba(0,0,0,0.20)' : 'rgba(255,255,255,0.22)';
+      context.fillRect(px + ox, py + oy, dot, dot);
+    }
+  }
+}
+
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
+  const skin = SKINS[activeSkin];
+  const px = x * size;
+  const py = y * size;
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  skin.block(context, px, py, size, skin.colors[colorIndex]);
   // marca de bomba: cuadrado interior oscuro (estilo cuadrado, sin formas redondeadas)
   if (colorIndex === BOMB) {
     const inner = Math.round(size * 0.4);
     const off = Math.round((size - inner) / 2);
     context.fillStyle = 'rgba(0,0,0,0.55)';
-    context.fillRect(x * size + off, y * size + off, inner, inner);
+    context.fillRect(px + off, py + off, inner, inner);
   }
   context.globalAlpha = 1;
 }
 
 function drawGrid() {
-  ctx.strokeStyle = GRID_LINE_COLORS[theme];
+  ctx.strokeStyle = SKINS[activeSkin].grid(theme);
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -350,8 +484,20 @@ function drawGrid() {
   }
 }
 
+// Pinta el fondo del canvas segun la skin: si define `bg` se rellena (Neon lo
+// necesita en negro), si no se limpia y el fondo lo aporta el CSS de #board.
+function paintBackground(context, w, h) {
+  const bg = SKINS[activeSkin].bg;
+  if (bg) {
+    context.fillStyle = bg;
+    context.fillRect(0, 0, w, h);
+  } else {
+    context.clearRect(0, 0, w, h);
+  }
+}
+
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  paintBackground(ctx, canvas.width, canvas.height);
   drawGrid();
 
   // board
@@ -374,7 +520,7 @@ function draw() {
 
 function drawNext() {
   const NB = 30;
-  nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+  paintBackground(nextCtx, nextCanvas.width, nextCanvas.height);
   const shape = next.shape;
   const offX = Math.floor((4 - shape[0].length) / 2);
   const offY = Math.floor((4 - shape.length) / 2);
@@ -522,5 +668,7 @@ applyTheme(localStorage.getItem('theme') || 'dark');
 buildLevelSelects();
 startLevel = clampLevel(loadJSON(START_LEVEL_KEY, 1));
 syncLevelSelects();
+buildSkinSelect();
+applySkin(loadJSON(SKIN_KEY, 'retro'));
 showScreen('start');
 onStartScreen();

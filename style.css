@@ -311,3 +311,15 @@ kbd {
 .skin-slot:empty {
   display: none;
 }
+
+/* ---- Skins ---- */
+/* El selector se genera desde JS dentro de #start-skin y reutiliza .menu-field /
+   .menu-select del tema; solo se fuerza el ancho completo del <select>.
+   Se mantiene la especificidad de clase para no romper .skin-slot:empty. */
+.skin-slot > .menu-field {
+  gap: 4px;
+}
+
+.skin-slot .menu-select {
+  width: 100%;
+}
