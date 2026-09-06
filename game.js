@@ -41,6 +41,9 @@ const GRID_LINE_COLORS = { dark: '#22222e', light: '#d8dae8' };
 const START_LEVEL_KEY = 'tetris.startLevel';
 const MAX_START_LEVEL = 15;
 
+const HIGHSCORES_KEY = 'tetris.highscores';
+const MAX_SCORES = 5;
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -64,6 +67,8 @@ const controlsBtn = document.getElementById('controls-btn');
 const controlsList = document.getElementById('controls-list');
 const startLevelSel = document.getElementById('start-level');
 const pauseLevelSel = document.getElementById('pause-level');
+const startRecords = document.getElementById('start-records');
+const gameoverRecords = document.getElementById('gameover-records');
 
 // Estado del juego. `screen` es la máquina de estados de la UI:
 // 'start' | 'playing' | 'paused' | 'gameover'. `paused`/`gameOver` se derivan
@@ -79,6 +84,15 @@ let combo;
 let paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let screen = 'start';
 let theme = 'dark';
+// Datos de la partida recién terminada y firma de la entrada ya guardada en el
+// top, para que la tabla de records resalte la fila actual y no permita guardar
+// dos veces la misma partida.
+let currentRun = null;
+let savedRunSig = null;
+// Combo máximo alcanzado durante la partida en curso. `combo` se resetea a 0 al
+// lockear sin limpiar (incluido el lock que provoca el game over), así que para
+// el record "mejor combo" hace falta recordar el máximo aparte.
+let runBestCombo = 0;
 
 /* ---------- Preferencias persistentes ---------- */
 
@@ -160,9 +174,198 @@ function showScreen(name) {
   }
 }
 
-// Hooks ampliados por otras unidades del batch (records). En la base no hacen nada.
-function onGameOver() {}
-function onStartScreen() {}
+// Hooks ampliados por otras unidades del batch. Ver "Tabla de records" más abajo.
+function onGameOver() {
+  savedRunSig = null;
+  currentRun = { score, lines, level, date: new Date().toISOString() };
+
+  // `bestCombo` y `maxLines` se actualizan SIEMPRE al terminar, entre o no la
+  // puntuación en el top 5.
+  const data = loadHighscores();
+  let changed = false;
+  if (runBestCombo > data.bestCombo) {
+    data.bestCombo = runBestCombo;
+    changed = true;
+  }
+  if (lines > data.maxLines) {
+    data.maxLines = lines;
+    changed = true;
+  }
+  if (changed) saveHighscores(data);
+
+  renderRecords(gameoverRecords, { editable: true });
+}
+
+function onStartScreen() {
+  renderRecords(startRecords, { editable: false });
+}
+
+/* ---------- Tabla de records local ---------- */
+
+// Estructura persistida bajo `HIGHSCORES_KEY`:
+//   { scores: [{ name, score, lines, level, date }], bestCombo, maxLines }
+// `scores` es el top 5 ordenado por `score` descendente.
+function loadHighscores() {
+  const raw = loadJSON(HIGHSCORES_KEY, null);
+  const data = raw && typeof raw === 'object' ? raw : {};
+  const scores = Array.isArray(data.scores)
+    ? data.scores.filter(s => s && typeof s.score === 'number')
+    : [];
+  return {
+    scores,
+    bestCombo: Number.isFinite(data.bestCombo) ? data.bestCombo : 0,
+    maxLines: Number.isFinite(data.maxLines) ? data.maxLines : 0,
+  };
+}
+
+function saveHighscores(data) {
+  saveJSON(HIGHSCORES_KEY, data);
+}
+
+function sortedTop(scores) {
+  return scores.slice().sort((a, b) => b.score - a.score).slice(0, MAX_SCORES);
+}
+
+function qualifiesForTop(runScore, top) {
+  if (runScore <= 0) return false;
+  if (top.length < MAX_SCORES) return true;
+  return runScore > top[top.length - 1].score;
+}
+
+// Firma estable de una entrada para poder localizar la fila recién insertada
+// tras releer de localStorage (las referencias de objeto no sobreviven al parse).
+function runSig(entry) {
+  return [entry.name, entry.score, entry.date].join(' ');
+}
+
+function saveCurrentRun(name, container, opts) {
+  if (savedRunSig || !currentRun) return; // guarda contra doble activación
+  const entry = {
+    name: name || 'Anónimo',
+    score: currentRun.score,
+    lines: currentRun.lines,
+    level: currentRun.level,
+    date: currentRun.date,
+  };
+  const data = loadHighscores();
+  data.scores.push(entry);
+  data.scores = sortedTop(data.scores);
+  saveHighscores(data);
+  savedRunSig = runSig(entry);
+  renderRecords(container, opts);
+}
+
+// Única función de pintado, reutilizada por la pantalla de inicio y el game over.
+// `opts.editable`: si la partida actual entra en el top, ofrece guardar nombre.
+function renderRecords(container, opts) {
+  if (!container) return;
+  opts = opts || {};
+  const data = loadHighscores();
+  const top = sortedTop(data.scores);
+  container.textContent = '';
+
+  const title = document.createElement('p');
+  title.className = 'records-title';
+  title.textContent = 'RECORDS';
+  container.appendChild(title);
+
+  if (top.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'records-empty';
+    empty.textContent = 'Sin records todavía';
+    container.appendChild(empty);
+  } else {
+    const table = document.createElement('table');
+    table.className = 'records-table';
+
+    const thead = document.createElement('thead');
+    const htr = document.createElement('tr');
+    for (const h of ['#', 'Nombre', 'Pts', 'Líneas', 'Nivel']) {
+      const th = document.createElement('th');
+      th.textContent = h;
+      htr.appendChild(th);
+    }
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    top.forEach((entry, i) => {
+      const tr = document.createElement('tr');
+      if (savedRunSig && runSig(entry) === savedRunSig) tr.className = 'is-current';
+      const cells = [
+        String(i + 1),
+        entry.name,
+        Number(entry.score).toLocaleString(),
+        String(entry.lines ?? 0),
+        String(entry.level ?? 1),
+      ];
+      for (const value of cells) {
+        const td = document.createElement('td');
+        td.textContent = value;
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+  }
+
+  const comboStat = document.createElement('p');
+  comboStat.className = 'records-stat';
+  comboStat.textContent = `Mejor combo: ${data.bestCombo}`;
+  container.appendChild(comboStat);
+
+  const linesStat = document.createElement('p');
+  linesStat.className = 'records-stat';
+  linesStat.textContent = `Líneas máximas: ${data.maxLines}`;
+  container.appendChild(linesStat);
+
+  const canSave =
+    opts.editable && currentRun && !savedRunSig && qualifiesForTop(currentRun.score, top);
+  if (canSave) {
+    const form = document.createElement('div');
+    form.className = 'records-save';
+
+    const input = document.createElement('input');
+    input.id = 'hs-name';
+    input.type = 'text';
+    input.maxLength = 12;
+    input.placeholder = 'Tu nombre';
+    input.setAttribute('aria-label', 'Nombre para el record');
+
+    const saveBtn = document.createElement('button');
+    saveBtn.id = 'hs-save-btn';
+    saveBtn.type = 'button';
+    saveBtn.className = 'menu-btn';
+    saveBtn.textContent = 'Guardar';
+
+    const commit = () => {
+      saveBtn.disabled = true;
+      saveCurrentRun(input.value.trim().slice(0, 12), container, opts);
+    };
+    saveBtn.addEventListener('click', commit);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') commit();
+    });
+
+    form.appendChild(input);
+    form.appendChild(saveBtn);
+    container.appendChild(form);
+  }
+
+  const resetBtn = document.createElement('button');
+  resetBtn.id = 'reset-records-btn';
+  resetBtn.type = 'button';
+  resetBtn.className = 'menu-btn menu-btn--ghost';
+  resetBtn.textContent = 'Borrar records';
+  resetBtn.addEventListener('click', () => {
+    if (!confirm('¿Borrar todos los records?')) return;
+    saveHighscores({ scores: [], bestCombo: 0, maxLines: 0 });
+    savedRunSig = null;
+    renderRecords(container, opts);
+  });
+  container.appendChild(resetBtn);
+}
 
 /* ---------- Lógica del tablero ---------- */
 
@@ -231,6 +434,7 @@ function clearLines() {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
     combo++;
+    if (combo > runBestCombo) runBestCombo = combo;
     level = gameStartLevel + Math.floor(lines / 10);
     dropInterval = levelInterval(level);
     updateHUD();
@@ -430,6 +634,7 @@ function init() {
   score = 0;
   lines = 0;
   combo = 0;
+  runBestCombo = 0;
   gameOver = false;
   paused = false;
   startLevel = clampLevel(loadJSON(START_LEVEL_KEY, 1));
