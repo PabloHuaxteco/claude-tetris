@@ -66,6 +66,7 @@ body {
   position: absolute;
   top: 0;
   right: 0;
+  z-index: 10;
   width: 36px;
   height: 36px;
   display: flex;
@@ -237,6 +238,10 @@ kbd {
   display: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .overlay-box {
   text-align: center;
   display: flex;
@@ -258,8 +263,7 @@ kbd {
   color: var(--overlay-score);
 }
 
-#restart-btn {
-  margin-top: 8px;
+.btn-primary {
   background: var(--btn-bg);
   color: var(--btn-text);
   border: none;
@@ -272,6 +276,156 @@ kbd {
   transition: background 0.15s;
 }
 
-#restart-btn:hover {
+.btn-primary:hover {
   background: var(--btn-hover);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--controls-text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--overlay-title);
+  color: var(--overlay-title);
+}
+
+/* ---- Tabla de records ---- */
+.overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.records-panel {
+  width: 280px;
+  max-width: 78vw;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.record-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.record-list li {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  color: var(--text);
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.record-rank {
+  color: var(--label-color);
+  font-weight: 700;
+}
+
+.record-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.record-score {
+  color: var(--value-color);
+  font-weight: 700;
+}
+
+.record-highlight {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+}
+
+.record-highlight .record-rank,
+.record-highlight .record-score {
+  color: var(--btn-text);
+}
+
+.record-empty {
+  display: block !important;
+  text-align: center;
+  color: var(--label-color);
+  font-size: 12px;
+  padding: 10px 0;
+}
+
+.record-extra {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--controls-text);
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.record-extra strong {
+  color: var(--value-color);
+}
+
+/* ---- Entrada de nombre ---- */
+.name-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  max-width: 78vw;
+}
+
+.name-entry label {
+  font-size: 12px;
+  color: var(--overlay-score);
+}
+
+.name-entry-row {
+  display: flex;
+  gap: 6px;
+}
+
+#player-name {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: var(--text);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+#player-name:focus-visible {
+  outline: 2px solid var(--value-color);
+  outline-offset: 1px;
+}
+
+#save-score-btn {
+  padding: 6px 16px;
+  font-size: 13px;
 }

@@ -59,7 +59,29 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
-        <button id="restart-btn">Reiniciar</button>
+        <div id="name-entry" class="name-entry hidden">
+          <label for="player-name">¡Nuevo récord! Escribe tu nombre:</label>
+          <div class="name-entry-row">
+            <input id="player-name" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="TÚ" />
+            <button id="save-score-btn" class="btn-primary" type="button">Guardar</button>
+          </div>
+        </div>
+        <div id="overlay-records" class="records-panel"></div>
+        <div class="overlay-actions">
+          <button id="restart-btn" class="btn-primary">Reiniciar</button>
+          <button id="reset-records-btn" class="btn-secondary" type="button">Resetear records</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="start-overlay" class="overlay hidden">
+      <div class="overlay-box">
+        <p id="start-title">RECORDS</p>
+        <div id="start-records" class="records-panel"></div>
+        <div class="overlay-actions">
+          <button id="start-btn" class="btn-primary" type="button">Jugar</button>
+          <button id="start-reset-records-btn" class="btn-secondary" type="button">Resetear records</button>
+        </div>
       </div>
     </div>
   </div>
