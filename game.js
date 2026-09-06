@@ -50,9 +50,35 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggleBtn = document.getElementById('theme-toggle');
+const pauseMenu = document.getElementById('pause-menu');
+const resumeBtn = document.getElementById('resume-btn');
+const pauseRestartBtn = document.getElementById('pause-restart-btn');
+const toggleControlsBtn = document.getElementById('toggle-controls-btn');
+const pauseControls = document.getElementById('pause-controls');
+const startLevelSel = document.getElementById('start-level');
+
+const MAX_START_LEVEL = 20;
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let theme = 'dark';
+let startLevel = clampStartLevel(parseInt(localStorage.getItem('startLevel'), 10));
+
+function clampStartLevel(n) {
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(MAX_START_LEVEL, Math.max(1, Math.floor(n)));
+}
+
+function dropIntervalForLevel(lv) {
+  return Math.max(100, 1000 - (lv - 1) * 90);
+}
+
+for (let lv = 1; lv <= MAX_START_LEVEL; lv++) {
+  const opt = document.createElement('option');
+  opt.value = String(lv);
+  opt.textContent = String(lv);
+  startLevelSel.appendChild(opt);
+}
+startLevelSel.value = String(startLevel);
 
 function applyTheme(t) {
   theme = t === 'light' ? 'light' : 'dark';
@@ -127,8 +153,8 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    level = startLevel + Math.floor(lines / 10);
+    dropInterval = dropIntervalForLevel(level);
     updateHUD();
   }
 }
@@ -286,17 +312,28 @@ function endGame() {
   overlay.classList.remove('hidden');
 }
 
+function openPauseMenu() {
+  pauseControls.classList.add('hidden');
+  toggleControlsBtn.setAttribute('aria-expanded', 'false');
+  startLevelSel.value = String(startLevel);
+  pauseMenu.classList.remove('hidden');
+  resumeBtn.focus();
+}
+
+function closePauseMenu() {
+  pauseMenu.classList.add('hidden');
+}
+
 function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
+    closePauseMenu();
     lastTime = performance.now();
     loop(lastTime);
   } else {
     cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
+    openPauseMenu();
   }
 }
 
@@ -325,23 +362,24 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  level = startLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = dropIntervalForLevel(level);
   dropAccum = 0;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  closePauseMenu();
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
 document.addEventListener('keydown', e => {
   if (e.target === themeToggleBtn) return;
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -366,6 +404,24 @@ document.addEventListener('keydown', e => {
 });
 
 restartBtn.addEventListener('click', init);
+
+resumeBtn.addEventListener('click', () => {
+  if (paused) togglePause();
+});
+
+pauseRestartBtn.addEventListener('click', init);
+
+toggleControlsBtn.addEventListener('click', () => {
+  const willShow = pauseControls.classList.contains('hidden');
+  pauseControls.classList.toggle('hidden', !willShow);
+  toggleControlsBtn.setAttribute('aria-expanded', String(willShow));
+});
+
+startLevelSel.addEventListener('change', () => {
+  startLevel = clampStartLevel(parseInt(startLevelSel.value, 10));
+  startLevelSel.value = String(startLevel);
+  localStorage.setItem('startLevel', String(startLevel));
+});
 
 themeToggleBtn.addEventListener('click', () => {
   const newTheme = theme === 'dark' ? 'light' : 'dark';
