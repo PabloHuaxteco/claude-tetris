@@ -184,11 +184,37 @@ const playerNameInput = document.getElementById('player-name');
 const saveScoreBtn = document.getElementById('save-score-btn');
 const overlayRecordsEl = document.getElementById('overlay-records');
 const resetRecordsBtn = document.getElementById('reset-records-btn');
+const pauseMenu = document.getElementById('pause-menu');
+const resumeBtn = document.getElementById('resume-btn');
+const pauseRestartBtn = document.getElementById('pause-restart-btn');
+const toggleControlsBtn = document.getElementById('toggle-controls-btn');
+const pauseControls = document.getElementById('pause-controls');
+const startLevelSel = document.getElementById('start-level');
+
+const MAX_START_LEVEL = 20;
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let combo, maxCombo, pendingScore;
 let theme = 'dark';
 let skin = 'retro';
+let startLevel = clampStartLevel(parseInt(localStorage.getItem('startLevel'), 10));
+
+function clampStartLevel(n) {
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(MAX_START_LEVEL, Math.max(1, Math.floor(n)));
+}
+
+function dropIntervalForLevel(lv) {
+  return Math.max(100, 1000 - (lv - 1) * 90);
+}
+
+for (let lv = 1; lv <= MAX_START_LEVEL; lv++) {
+  const opt = document.createElement('option');
+  opt.value = String(lv);
+  opt.textContent = String(lv);
+  startLevelSel.appendChild(opt);
+}
+startLevelSel.value = String(startLevel);
 
 /* ---------- Tabla de records (localStorage) ---------- */
 
@@ -363,8 +389,8 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    level = startLevel + Math.floor(lines / 10);
+    dropInterval = dropIntervalForLevel(level);
     updateHUD();
   }
   return cleared;
@@ -535,21 +561,28 @@ function endGame() {
   overlay.classList.remove('hidden');
 }
 
+function openPauseMenu() {
+  pauseControls.classList.add('hidden');
+  toggleControlsBtn.setAttribute('aria-expanded', 'false');
+  startLevelSel.value = String(startLevel);
+  pauseMenu.classList.remove('hidden');
+  resumeBtn.focus();
+}
+
+function closePauseMenu() {
+  pauseMenu.classList.add('hidden');
+}
+
 function togglePause() {
   if (gameOver || !current) return;
   paused = !paused;
   if (!paused) {
-    overlay.classList.add('hidden');
+    closePauseMenu();
     lastTime = performance.now();
     loop(lastTime);
   } else {
     cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    nameEntry.classList.add('hidden');
-    overlayRecordsEl.classList.add('hidden');
-    resetRecordsBtn.classList.add('hidden');
-    overlay.classList.remove('hidden');
+    openPauseMenu();
   }
 }
 
@@ -578,13 +611,13 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  level = startLevel;
   paused = false;
   gameOver = false;
   combo = 0;
   maxCombo = 0;
   pendingScore = null;
-  dropInterval = 1000;
+  dropInterval = dropIntervalForLevel(level);
   dropAccum = 0;
   lastTime = performance.now();
   next = randomPiece();
@@ -592,13 +625,14 @@ function init() {
   updateHUD();
   nameEntry.classList.add('hidden');
   overlay.classList.add('hidden');
+  closePauseMenu();
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
 document.addEventListener('keydown', e => {
   if (e.target === themeToggleBtn) return;
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (paused || gameOver || !current) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -649,6 +683,24 @@ resetRecordsBtn.addEventListener('click', () => {
 startResetBtn.addEventListener('click', () => {
   resetRecords();
   renderRecords(startRecordsEl);
+});
+
+resumeBtn.addEventListener('click', () => {
+  if (paused) togglePause();
+});
+
+pauseRestartBtn.addEventListener('click', init);
+
+toggleControlsBtn.addEventListener('click', () => {
+  const willShow = pauseControls.classList.contains('hidden');
+  pauseControls.classList.toggle('hidden', !willShow);
+  toggleControlsBtn.setAttribute('aria-expanded', String(willShow));
+});
+
+startLevelSel.addEventListener('change', () => {
+  startLevel = clampStartLevel(parseInt(startLevelSel.value, 10));
+  startLevelSel.value = String(startLevel);
+  localStorage.setItem('startLevel', String(startLevel));
 });
 
 themeToggleBtn.addEventListener('click', () => {
