@@ -14,6 +14,7 @@ const COLORS = [
   '#90caf9', // J - pale blue
   '#ffb74d', // L - orange
   '#b0bec5', // Tuerca - gris metálico
+  '#ff1744', // Bomba - power-up (rojo intenso)
 ];
 
 const PIECES = [
@@ -26,9 +27,14 @@ const PIECES = [
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
   [[8,8,8],[8,0,8],[8,8,8]],                  // Tuerca (reto): anillo 3x3 con hueco central
+  [[9]],                                       // Bomba (power-up): 1x1, al bloquear destruye un área 3x3
 ];
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
+
+const BOMB = 9;              // índice de la pieza bomba en PIECES/COLORS
+const BOMB_RADIUS = 1;       // radio de la explosión → área (2*r+1) x (2*r+1) = 3x3
+const BOMB_BLOCK_SCORE = 10; // puntos por bloque destruido, multiplicados por level
 
 const GRID_LINE_COLORS = { dark: '#22222e', light: '#d8dae8' };
 
@@ -62,7 +68,7 @@ function createBoard() {
 }
 
 function randomPiece() {
-  const type = Math.floor(Math.random() * 8) + 1;
+  const type = Math.floor(Math.random() * 9) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
@@ -127,6 +133,34 @@ function clearLines() {
   }
 }
 
+function bombCells() {
+  const cells = [];
+  for (let r = 0; r < current.shape.length; r++)
+    for (let c = 0; c < current.shape[r].length; c++)
+      if (current.shape[r][c] === BOMB && current.y + r >= 0)
+        cells.push({ x: current.x + c, y: current.y + r });
+  return cells;
+}
+
+function explode(cells) {
+  let destroyed = 0;
+  for (const { x, y } of cells) {
+    for (let r = y - BOMB_RADIUS; r <= y + BOMB_RADIUS; r++) {
+      for (let c = x - BOMB_RADIUS; c <= x + BOMB_RADIUS; c++) {
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+        if (board[r][c]) {
+          board[r][c] = 0;
+          destroyed++;
+        }
+      }
+    }
+  }
+  if (destroyed) {
+    score += destroyed * BOMB_BLOCK_SCORE * level;
+    updateHUD();
+  }
+}
+
 function ghostY() {
   let gy = current.y;
   while (!collide(current.shape, current.x, gy + 1)) gy++;
@@ -151,7 +185,9 @@ function softDrop() {
 }
 
 function lockPiece() {
+  const bombs = bombCells();
   merge();
+  if (bombs.length) explode(bombs);
   clearLines();
   spawn();
 }
@@ -181,6 +217,13 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   // highlight
   context.fillStyle = 'rgba(255,255,255,0.12)';
   context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  // marca de bomba: cuadrado interior oscuro (estilo cuadrado, sin formas redondeadas)
+  if (colorIndex === BOMB) {
+    const inner = Math.round(size * 0.4);
+    const off = Math.round((size - inner) / 2);
+    context.fillStyle = 'rgba(0,0,0,0.55)';
+    context.fillRect(x * size + off, y * size + off, inner, inner);
+  }
   context.globalAlpha = 1;
 }
 

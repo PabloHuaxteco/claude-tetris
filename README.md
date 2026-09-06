@@ -35,7 +35,8 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 
 - Tablero de **10 × 20** celdas.
 - Las **7 piezas estándar** (I, O, T, S, Z, J, L) con colores diferenciados.
-- Una **pieza de reto: la tuerca**, un anillo 3 × 3 gris metálico con un hueco cuadrado en el centro. Como ese hueco queda encerrado por sus propios bloques, ninguna pieza puede rellenarlo y la fila central de cada tuerca queda bloqueada de forma permanente. Sale con la misma probabilidad que el resto (1 de cada 8).
+- Una **pieza de reto: la tuerca**, un anillo 3 × 3 gris metálico con un hueco cuadrado en el centro. Como ese hueco queda encerrado por sus propios bloques, ninguna pieza puede rellenarlo y la fila central de cada tuerca queda bloqueada de forma permanente. Sale con la misma probabilidad que el resto (1 de cada 9).
+- Un **power-up: la bomba**, una pieza de una sola celda de color rojo intenso con un cuadrado oscuro en el centro. Al bloquearse destruye todos los bloques del área **3 × 3** centrada en ella (incluida la propia bomba) y suma **10 puntos por bloque destruido × nivel**. Los bloques que quedaban encima del hueco no caen. Es la vía para deshacer apilamientos mal hechos y abrir el hueco central de una tuerca ya fijada. Sale con la misma probabilidad que el resto (1 de cada 9).
 - **Rotación** con _wall kicks_ básicos (pequeños desplazamientos para que la pieza pueda rotar pegada a la pared).
 - **Soft drop** (bajada acelerada) y **hard drop** (caída instantánea).
 - **Pieza fantasma** (_ghost piece_): muestra dónde aterrizará la pieza actual.
@@ -109,8 +110,9 @@ Aporta el aspecto visual con estética _dark / retro arcade_: fondo oscuro, tipo
 
 Contiene toda la lógica del juego. A grandes rasgos:
 
-- **Modelo del tablero**: una matriz `ROWS × COLS` donde cada celda guarda `0` (vacía) o un índice de color (1–8) que identifica la pieza.
-- **Piezas**: definidas como matrices cuadradas. Para rotar se calcula la transposición + reverso de filas (`rotateCW`). La tuerca (índice 8) es simétrica, así que rotarla no la altera.
+- **Modelo del tablero**: una matriz `ROWS × COLS` donde cada celda guarda `0` (vacía) o un índice de color (1–9) que identifica la pieza.
+- **Piezas**: definidas como matrices cuadradas. Para rotar se calcula la transposición + reverso de filas (`rotateCW`). La tuerca (índice 8) es simétrica, así que rotarla no la altera. La bomba (índice 9) es 1 × 1, así que rotarla tampoco la altera.
+- **Bomba** (`bombCells` + `explode`): al bloquear la pieza, si contenía celdas bomba se limpian los bloques del área 3 × 3 alrededor de cada una antes de `clearLines`.
 - **Detección de colisiones** (`collide`): comprueba que ninguna celda de la pieza salga del tablero ni se solape con bloques ya fijados.
 - **Wall kicks** (`tryRotate`): si la rotación choca, intenta desplazar la pieza ±1 y ±2 columnas antes de descartar el giro.
 - **Game loop** (`loop`): basado en `requestAnimationFrame`, acumula el tiempo transcurrido y baja la pieza una fila cuando se supera `dropInterval`.
@@ -174,7 +176,8 @@ Algunos parámetros fáciles de tunear en `game.js`:
 | `COLS`         | Columnas del tablero                     | `10`                  |
 | `ROWS`         | Filas del tablero                        | `20`                  |
 | `BLOCK`        | Tamaño en píxeles de cada celda          | `30`                  |
-| `COLORS`       | Paleta de colores por tipo de pieza      | 8 colores             |
+| `COLORS`       | Paleta de colores por tipo de pieza      | 9 colores             |
+| `BOMB_BLOCK_SCORE` | Puntos por bloque destruido por la bomba (× nivel) | `10`     |
 | `LINE_SCORES`  | Puntos por 1, 2, 3 o 4 líneas eliminadas | `[0,100,300,500,800]` |
 | `dropInterval` | Velocidad inicial de caída en ms         | `1000`                |
 
