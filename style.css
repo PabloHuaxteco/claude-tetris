@@ -151,6 +151,50 @@ body {
   border-radius: 4px;
 }
 
+/* ---- Selector de skin ---- */
+.skin-select {
+  background: var(--kbd-bg);
+  color: var(--text);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.skin-select:focus-visible {
+  outline: 2px solid var(--value-color);
+  outline-offset: 2px;
+}
+
+/* ---- Overrides por skin ---- */
+body.skin-neon {
+  --bg: #05060a;
+}
+
+body.skin-neon #board,
+body.skin-neon #next-canvas {
+  background: #05060a;
+  border-color: #123a4a;
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.25);
+}
+
+body.skin-neon .game-title {
+  color: #00e5ff;
+  text-shadow: 0 0 12px #00e5ff, 0 0 28px rgba(0, 229, 255, 0.6);
+}
+
+body.skin-pastel #board,
+body.skin-pastel #next-canvas {
+  background: #22222e;
+}
+
+body.light.skin-pastel #board,
+body.light.skin-pastel #next-canvas {
+  background: #eceef6;
+}
+
 /* ---- Controles ---- */
 .controls ul {
   list-style: none;

@@ -17,6 +17,33 @@ const COLORS = [
   '#ff1744', // Bomba - power-up (rojo intenso)
 ];
 
+// Paletas alternativas por skin (mismos índices que COLORS)
+const NEON_COLORS = [
+  null,
+  '#00e5ff', // I
+  '#ffea00', // O
+  '#d500f9', // T
+  '#00e676', // S
+  '#ff1744', // Z
+  '#2979ff', // J
+  '#ff9100', // L
+  '#b0bec5', // Tuerca
+  '#ff1744', // Bomba
+];
+
+const PASTEL_COLORS = [
+  null,
+  '#a0e7e5', // I
+  '#f9e79f', // O
+  '#d5b8e8', // T
+  '#b8e6c1', // S
+  '#f5b7b1', // Z
+  '#aec7e8', // J
+  '#ffd8a8', // L
+  '#cfd8dc', // Tuerca
+  '#ff8a80', // Bomba
+];
+
 const PIECES = [
   null,
   [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], // I
@@ -36,7 +63,101 @@ const BOMB = 9;              // índice de la pieza bomba en PIECES/COLORS
 const BOMB_RADIUS = 1;       // radio de la explosión → área (2*r+1) x (2*r+1) = 3x3
 const BOMB_BLOCK_SCORE = 10; // puntos por bloque destruido, multiplicados por level
 
-const GRID_LINE_COLORS = { dark: '#22222e', light: '#d8dae8' };
+// ---- Skins / temas visuales ----------------------------------------------
+// Cada skin aporta su paleta, el color de las líneas de la cuadrícula por
+// tema (claro/oscuro) y la función que pinta un bloque en el canvas.
+// Todos los bloques se dibujan como cuadrados: nada de esquinas redondeadas.
+
+function bombMark(context, x, y, size) {
+  const inner = Math.round(size * 0.4);
+  const off = Math.round((size - inner) / 2);
+  context.fillStyle = 'rgba(0,0,0,0.55)';
+  context.fillRect(x * size + off, y * size + off, inner, inner);
+}
+
+// Retro: relleno plano + franja de brillo superior (estilo original).
+function retroBlock(context, x, y, ci, size, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  context.fillStyle = COLORS[ci];
+  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  context.fillStyle = 'rgba(255,255,255,0.12)';
+  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (ci === BOMB) bombMark(context, x, y, size);
+  context.globalAlpha = 1;
+}
+
+// Neon: fondo oscuro dentro del bloque, borde brillante con glow (shadowBlur)
+// y un tinte de color tenue encima.
+function neonBlock(context, x, y, ci, size, alpha) {
+  const color = NEON_COLORS[ci];
+  const a = alpha ?? 1;
+  const bx = x * size + 1, by = y * size + 1, s = size - 2;
+  context.globalAlpha = a;
+  context.fillStyle = 'rgba(0,0,0,0.6)';
+  context.fillRect(bx, by, s, s);
+  context.shadowColor = color;
+  context.shadowBlur = 12;
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.strokeRect(bx + 1, by + 1, s - 2, s - 2);
+  context.shadowBlur = 0;
+  context.globalAlpha = a * 0.22;
+  context.fillStyle = color;
+  context.fillRect(bx, by, s, s);
+  context.globalAlpha = a;
+  if (ci === BOMB) bombMark(context, x, y, size);
+  context.globalAlpha = 1;
+}
+
+// Pastel: colores suaves, separación mayor entre bloques y un borde interior
+// blanco translúcido para dar sensación mullida (sin redondear esquinas).
+function pastelBlock(context, x, y, ci, size, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  const bx = x * size + 2, by = y * size + 2, s = size - 4;
+  context.fillStyle = PASTEL_COLORS[ci];
+  context.fillRect(bx, by, s, s);
+  context.strokeStyle = 'rgba(255,255,255,0.4)';
+  context.lineWidth = 2;
+  context.strokeRect(bx + 1, by + 1, s - 2, s - 2);
+  if (ci === BOMB) bombMark(context, x, y, size);
+  context.globalAlpha = 1;
+}
+
+// Patrón fijo de textura para la skin pixel art (rejilla 6x6 de "téxeles";
+// 'l' = luz, 'd' = sombra). Fijo para que no parpadee entre frames.
+const PIXEL_TEXELS = [
+  [0, 0, 'l'], [1, 0, 'l'], [5, 0, 'd'], [4, 1, 'd'],
+  [2, 2, 'l'], [5, 3, 'd'], [0, 4, 'd'], [3, 4, 'l'],
+  [1, 5, 'd'], [4, 5, 'l'], [5, 5, 'd'], [2, 3, 'd'],
+];
+
+function pixelBlock(context, x, y, ci, size, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  const bx = x * size + 1, by = y * size + 1, s = size - 2;
+  context.fillStyle = COLORS[ci];
+  context.fillRect(bx, by, s, s);
+  const u = s / 6;
+  for (const [cx, cy, k] of PIXEL_TEXELS) {
+    context.fillStyle = k === 'l' ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.3)';
+    context.fillRect(bx + Math.floor(cx * u), by + Math.floor(cy * u), Math.ceil(u), Math.ceil(u));
+  }
+  // borde tipo sprite
+  context.fillStyle = 'rgba(0,0,0,0.35)';
+  context.fillRect(bx, by, s, 1);
+  context.fillRect(bx, by, 1, s);
+  context.fillStyle = 'rgba(255,255,255,0.18)';
+  context.fillRect(bx, by + s - 1, s, 1);
+  context.fillRect(bx + s - 1, by, 1, s);
+  if (ci === BOMB) bombMark(context, x, y, size);
+  context.globalAlpha = 1;
+}
+
+const SKINS = {
+  retro:  { block: retroBlock,  grid: { dark: '#22222e', light: '#d8dae8' } },
+  neon:   { block: neonBlock,   grid: { dark: '#10233a', light: '#10233a' } },
+  pastel: { block: pastelBlock, grid: { dark: '#2e2e3e', light: '#e2e4ee' } },
+  pixel:  { block: pixelBlock,  grid: { dark: '#1e1e28', light: '#cfd2e0' } },
+};
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -50,9 +171,11 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggleBtn = document.getElementById('theme-toggle');
+const skinSelect = document.getElementById('skin-select');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let theme = 'dark';
+let skin = 'retro';
 
 function applyTheme(t) {
   theme = t === 'light' ? 'light' : 'dark';
@@ -61,6 +184,15 @@ function applyTheme(t) {
   themeToggleBtn.textContent = theme === 'light' ? '☀️' : '🌙';
   themeToggleBtn.title = theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro';
   themeToggleBtn.setAttribute('aria-label', themeToggleBtn.title);
+}
+
+function applySkin(name) {
+  skin = SKINS[name] ? name : 'retro';
+  document.body.classList.remove('skin-retro', 'skin-neon', 'skin-pastel', 'skin-pixel');
+  document.body.classList.add('skin-' + skin);
+  if (skinSelect) skinSelect.value = skin;
+  if (board) draw();
+  if (next) drawNext();
 }
 
 function createBoard() {
@@ -210,25 +342,11 @@ function updateHUD() {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
-  context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  // marca de bomba: cuadrado interior oscuro (estilo cuadrado, sin formas redondeadas)
-  if (colorIndex === BOMB) {
-    const inner = Math.round(size * 0.4);
-    const off = Math.round((size - inner) / 2);
-    context.fillStyle = 'rgba(0,0,0,0.55)';
-    context.fillRect(x * size + off, y * size + off, inner, inner);
-  }
-  context.globalAlpha = 1;
+  SKINS[skin].block(context, x, y, colorIndex, size, alpha);
 }
 
 function drawGrid() {
-  ctx.strokeStyle = GRID_LINE_COLORS[theme];
+  ctx.strokeStyle = SKINS[skin].grid[theme];
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -246,6 +364,7 @@ function drawGrid() {
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.shadowBlur = 0;
   drawGrid();
 
   // board
@@ -269,6 +388,7 @@ function draw() {
 function drawNext() {
   const NB = 30;
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+  nextCtx.shadowBlur = 0;
   const shape = next.shape;
   const offX = Math.floor((4 - shape[0].length) / 2);
   const offY = Math.floor((4 - shape.length) / 2);
@@ -373,5 +493,11 @@ themeToggleBtn.addEventListener('click', () => {
   applyTheme(newTheme);
 });
 
+skinSelect.addEventListener('change', () => {
+  localStorage.setItem('skin', skinSelect.value);
+  applySkin(skinSelect.value);
+});
+
 applyTheme(localStorage.getItem('theme') || 'dark');
+applySkin(localStorage.getItem('skin') || 'retro');
 init();
